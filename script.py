@@ -3,7 +3,7 @@ import glob
 import rarfile
 import zipfile
 from googleapiclient.discovery import build
-from googleapiclation.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
 import pickle
 
