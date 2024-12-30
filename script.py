@@ -6,6 +6,7 @@ import zipfile
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
+from googleapiclient.errors import HttpError
 
 # Load token.pickle
 token_path = 'token.pickle'
@@ -22,21 +23,29 @@ with open(token_path, 'rb') as token:
 
 # If the token is expired, refresh it
 if creds.expired and creds.refresh_token:
-    creds.refresh(Request())
+    try:
+        creds.refresh(Request())
+    except Exception as e:
+        print(f"Error refreshing token: {e}")
+        sys.exit(1)
 
 # Build the Google Drive service
 service = build('drive', 'v3', credentials=creds)
 
 def upload_file_to_drive(file_path, folder_id):
-    file_metadata = {
-        'name': os.path.basename(file_path),
-        'parents': [folder_id]
-    }
-    media = MediaFileUpload(file_path)
-    file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-    file_id = file.get('id')
-    download_link = f"https://drive.google.com/uc?id={file_id}&export=download"
-    return download_link
+    try:
+        file_metadata = {
+            'name': os.path.basename(file_path),
+            'parents': [folder_id]
+        }
+        media = MediaFileUpload(file_path, chunksize=256*1024, resumable=True)
+        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        file_id = file.get('id')
+        download_link = f"https://drive.google.com/uc?id={file_id}&export=download"
+        return download_link
+    except HttpError as e:
+        print(f"Error uploading file {file_path}: {e}")
+        return None
 
 def extract_file(file_path, extract_to):
     if rarfile.is_rarfile(file_path):
@@ -71,4 +80,5 @@ if __name__ == "__main__":
         for file in files:
             file_to_upload = os.path.join(root, file)
             link = upload_file_to_drive(file_to_upload, folder_id)
-            print(f"File {file_to_upload} uploaded successfully. Download it at: {link}")
+            if link:
+                print(f"File {file_to_upload} uploaded successfully. Download it at: {link}")
