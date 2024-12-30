@@ -1,0 +1,48 @@
+name: Extract and Upload to Google Drive
+
+on:
+  workflow_dispatch: # Memungkinkan workflow dijalankan secara manual
+    inputs:
+      file_urls:
+        description: "https://tipistream.tipikuy.workers.dev/0:/squid.game.the.challenge.s1.web.72-pahe.ink.part1.rar,https://tipistream.tipikuy.workers.dev/0:/squid.game.the.challenge.s1.web.72-pahe.ink.part2.rar
+"
+        required: true
+
+jobs:
+  extract_and_upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install rarfile google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
+
+      # Create token.pickle from secret
+      - name: Create token.pickle
+        run: |
+          echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle
+
+      # Download files from URLs
+      - name: Download files
+        run: |
+          IFS=',' read -r -a urls <<< "${{ inputs.file_urls }}"
+          for url in "${urls[@]}"; do
+            wget "$url" -O "$(basename "$url")"
+          done
+
+      # Run Python script
+      - name: Extract and upload to Google Drive
+        run: |
+          python3 script.py
