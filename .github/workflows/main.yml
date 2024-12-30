@@ -4,8 +4,7 @@ on:
   workflow_dispatch: # Memungkinkan workflow dijalankan secara manual
     inputs:
       file_urls:
-        description: "https://tipistream.tipikuy.workers.dev/0:/squid.game.the.challenge.s1.web.72-pahe.ink.part1.rar,https://tipistream.tipikuy.workers.dev/0:/squid.game.the.challenge.s1.web.72-pahe.ink.part2.rar
-"
+        description: "Daftar URL file RAR/ZIP yang akan diunduh (dipisahkan dengan koma)"
         required: true
 
 jobs:
