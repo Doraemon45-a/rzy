@@ -39,21 +39,38 @@ def upload_to_drive(file_path, folder_id="root"):
 def extract_file(file_name):
     extracted_files = []
     if file_name.endswith(".rar"):
-        # Untuk arsip multi-volume, ekstraksi dimulai dari file part1.rar
+        # Handle multi-volume RAR extraction, start with part1.rar
         if file_name.endswith(".part1.rar"):
             with rarfile.RarFile(file_name) as rf:
-                rf.extractall()  # Ekstrak ke direktori yang sama
-                extracted_files = [os.path.join(os.getcwd(), f) for f in rf.namelist()]  # Dapatkan path lengkap
+                rf.extractall()  # Extract to the current directory
+                extracted_files = [os.path.join(os.getcwd(), f) for f in rf.namelist()]  # Get full paths
         else:
             print(f"Skipping {file_name}, it's not the first volume in a split archive.")
     elif file_name.endswith(".zip"):
         with zipfile.ZipFile(file_name, 'r') as zf:
-            zf.extractall()  # Ekstrak ke direktori yang sama
-            extracted_files = [os.path.join(os.getcwd(), f) for f in zf.namelist()]  # Dapatkan path lengkap
+            zf.extractall()  # Extract to the current directory
+            extracted_files = [os.path.join(os.getcwd(), f) for f in zf.namelist()]  # Get full paths
     else:
         print(f"Unsupported file type: {file_name}")
         return []
     return extracted_files
+
+def check_and_create_folder(folder_name="Uploaded Files"):
+    # Check if folder exists on Google Drive
+    results = service.files().list(q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'",
+                                   fields="files(id, name)").execute()
+    folders = results.get('files', [])
+    if not folders:
+        # Folder does not exist, create it
+        folder_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        folder = service.files().create(body=folder_metadata, fields='id').execute()
+        return folder.get('id')
+    else:
+        # Folder exists, return folder ID
+        return folders[0].get('id')
 
 if __name__ == "__main__":
     # Get all RAR/ZIP files in the current directory
@@ -63,6 +80,9 @@ if __name__ == "__main__":
         exit(1)
 
     print(f"Found {len(archive_files)} archive files: {archive_files}")
+
+    # Check and create Google Drive folder if needed
+    folder_id = check_and_create_folder()
 
     # Extract and upload each file
     for archive in archive_files:
@@ -76,7 +96,8 @@ if __name__ == "__main__":
         print(f"Uploading extracted files from {archive} to Google Drive...")
         for extracted_file in extracted_files:
             if os.path.exists(extracted_file):
-                link = upload_to_drive(extracted_file)
+                print(f"Uploading {extracted_file}...")
+                link = upload_to_drive(extracted_file, folder_id)
                 print(f"Uploaded {extracted_file}: {link}")
             else:
                 print(f"Error: {extracted_file} does not exist.")
