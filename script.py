@@ -3,7 +3,7 @@ import glob
 import rarfile
 import zipfile
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from googleapiclation.http import MediaFileUpload
 from google.auth.transport.requests import Request
 import pickle
 
@@ -32,7 +32,7 @@ def upload_to_drive(file_path, folder_id="root"):
     Meng-upload file ke Google Drive ke folder yang ditentukan
     :param file_path: Path file yang akan di-upload
     :param folder_id: ID folder di Google Drive, defaultnya adalah 'root'
-    :return: ID file yang di-upload
+    :return: URL untuk mengunduh file
     """
     file_metadata = {
         'name': os.path.basename(file_path),
@@ -40,14 +40,20 @@ def upload_to_drive(file_path, folder_id="root"):
     }
     media = MediaFileUpload(file_path, resumable=True)
     file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    return f"Uploaded: {file.get('id')}"
+
+    # Set the file permissions to allow anyone with the link to view it
+    file_id = file.get('id')
+    permission = {
+        'type': 'anyone',
+        'role': 'reader'
+    }
+    service.permissions().create(fileId=file_id, body=permission).execute()
+
+    # Generate a sharable link to the file
+    link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+    return link
 
 def extract_file(file_name):
-    """
-    Mengekstrak file RAR atau ZIP
-    :param file_name: Nama file yang akan diekstrak
-    :return: List path file yang telah diekstrak
-    """
     extracted_files = []
     if file_name.endswith(".rar"):
         # Handle multi-volume RAR extraction, start with part1.rar
@@ -67,11 +73,6 @@ def extract_file(file_name):
     return extracted_files
 
 def check_and_create_folder(folder_name="Uploaded Files"):
-    """
-    Memeriksa apakah folder dengan nama tertentu ada di Google Drive, dan membuatnya jika tidak ada
-    :param folder_name: Nama folder di Google Drive
-    :return: ID folder di Google Drive
-    """
     # Check if folder exists on Google Drive
     results = service.files().list(q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'",
                                    fields="files(id, name)").execute()
@@ -116,6 +117,6 @@ if __name__ == "__main__":
             if os.path.exists(extracted_file):
                 print(f"Uploading {extracted_file}...")
                 link = upload_to_drive(extracted_file, folder_id)
-                print(f"Uploaded {extracted_file}: {link}")
+                print(f"File uploaded successfully. Download it at: {link}")
             else:
                 print(f"Error: {extracted_file} does not exist.")
