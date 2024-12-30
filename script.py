@@ -39,13 +39,17 @@ def upload_to_drive(file_path, folder_id="root"):
 def extract_file(file_name):
     extracted_files = []
     if file_name.endswith(".rar"):
-        with rarfile.RarFile(file_name) as rf:
-            rf.extractall()
-            extracted_files = rf.namelist()
+        # Untuk arsip multi-volume, ekstraksi dimulai dari file part1.rar
+        if file_name.endswith(".part1.rar"):
+            with rarfile.RarFile(file_name) as rf:
+                rf.extractall()  # Ekstrak ke direktori yang sama
+                extracted_files = [os.path.join(os.getcwd(), f) for f in rf.namelist()]  # Dapatkan path lengkap
+        else:
+            print(f"Skipping {file_name}, it's not the first volume in a split archive.")
     elif file_name.endswith(".zip"):
         with zipfile.ZipFile(file_name, 'r') as zf:
-            zf.extractall()
-            extracted_files = zf.namelist()
+            zf.extractall()  # Ekstrak ke direktori yang sama
+            extracted_files = [os.path.join(os.getcwd(), f) for f in zf.namelist()]  # Dapatkan path lengkap
     else:
         print(f"Unsupported file type: {file_name}")
         return []
@@ -65,7 +69,14 @@ if __name__ == "__main__":
         print(f"Extracting {archive}...")
         extracted_files = extract_file(archive)
 
+        if not extracted_files:
+            print(f"No files extracted from {archive}. Skipping upload.")
+            continue
+
         print(f"Uploading extracted files from {archive} to Google Drive...")
         for extracted_file in extracted_files:
-            link = upload_to_drive(extracted_file)
-            print(f"Uploaded {extracted_file}: {link}")
+            if os.path.exists(extracted_file):
+                link = upload_to_drive(extracted_file)
+                print(f"Uploaded {extracted_file}: {link}")
+            else:
+                print(f"Error: {extracted_file} does not exist.")
