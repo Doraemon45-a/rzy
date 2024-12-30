@@ -1,84 +1,71 @@
 import os
-import pickle
-import sys
+import glob
 import rarfile
 import zipfile
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
-from googleapiclient.errors import HttpError
+import pickle
 
 # Load token.pickle
-token_path = 'token.pickle'
-if not os.path.exists(token_path):
+TOKEN_PATH = 'token.pickle'
+if not os.path.exists(TOKEN_PATH):
     print("Error: token.pickle file not found")
-    sys.exit(1)
+    exit(1)
 
-with open(token_path, 'rb') as token:
+with open(TOKEN_PATH, 'rb') as token:
     try:
         creds = pickle.load(token)
     except Exception as e:
         print(f"Error loading token.pickle: {e}")
-        sys.exit(1)
+        exit(1)
 
-# If the token is expired, refresh it
+# Refresh token if expired
 if creds.expired and creds.refresh_token:
-    try:
-        creds.refresh(Request())
-    except Exception as e:
-        print(f"Error refreshing token: {e}")
-        sys.exit(1)
+    creds.refresh(Request())
 
-# Build the Google Drive service
+# Initialize Google Drive service
 service = build('drive', 'v3', credentials=creds)
 
-def upload_file_to_drive(file_path, folder_id):
-    try:
-        file_metadata = {
-            'name': os.path.basename(file_path),
-            'parents': [folder_id]
-        }
-        media = MediaFileUpload(file_path, chunksize=256*1024, resumable=True)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        file_id = file.get('id')
-        download_link = f"https://drive.google.com/uc?id={file_id}&export=download"
-        return download_link
-    except HttpError as e:
-        print(f"Error uploading file {file_path}: {e}")
-        return None
+def upload_to_drive(file_path, folder_id="root"):
+    file_metadata = {
+        'name': os.path.basename(file_path),
+        'parents': [folder_id]
+    }
+    media = MediaFileUpload(file_path, resumable=True)
+    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    return f"Uploaded: {file.get('id')}"
 
-def extract_file(file_path, extract_to):
-    if rarfile.is_rarfile(file_path):
-        print(f"Extracting RAR file: {file_path}")
-        with rarfile.RarFile(file_path) as rf:
-            rf.extractall(path=extract_to)
-    elif zipfile.is_zipfile(file_path):
-        print(f"Extracting ZIP file: {file_path}")
-        with zipfile.ZipFile(file_path, 'r') as zf:
-            zf.extractall(path=extract_to)
+def extract_file(file_name):
+    extracted_files = []
+    if file_name.endswith(".rar"):
+        with rarfile.RarFile(file_name) as rf:
+            rf.extractall()
+            extracted_files = rf.namelist()
+    elif file_name.endswith(".zip"):
+        with zipfile.ZipFile(file_name, 'r') as zf:
+            zf.extractall()
+            extracted_files = zf.namelist()
     else:
-        print(f"Error: {file_path} is not a valid RAR or ZIP file.")
-        sys.exit(1)
+        print(f"Unsupported file type: {file_name}")
+        return []
+    return extracted_files
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python3 script.py <file_path>")
-        sys.exit(1)
-    
-    file_path = sys.argv[1]  # Path ke file RAR/ZIP
-    folder_id = "1BqeRm09e4HkxOahklm2f8YU6qHkvIkPr"  # ID folder di Google Drive
+    # Get all RAR/ZIP files in the current directory
+    archive_files = glob.glob("*.rar") + glob.glob("*.zip")
+    if not archive_files:
+        print("No archive files found to extract.")
+        exit(1)
 
-    # Direktori untuk menyimpan file hasil ekstraksi
-    extract_dir = "./extracted"
-    os.makedirs(extract_dir, exist_ok=True)
+    print(f"Found {len(archive_files)} archive files: {archive_files}")
 
-    # Ekstrak file RAR/ZIP
-    extract_file(file_path, extract_dir)
+    # Extract and upload each file
+    for archive in archive_files:
+        print(f"Extracting {archive}...")
+        extracted_files = extract_file(archive)
 
-    # Upload file hasil ekstraksi ke Google Drive
-    for root, _, files in os.walk(extract_dir):
-        for file in files:
-            file_to_upload = os.path.join(root, file)
-            link = upload_file_to_drive(file_to_upload, folder_id)
-            if link:
-                print(f"File {file_to_upload} uploaded successfully. Download it at: {link}")
+        print(f"Uploading extracted files from {archive} to Google Drive...")
+        for extracted_file in extracted_files:
+            link = upload_to_drive(extracted_file)
+            print(f"Uploaded {extracted_file}: {link}")
