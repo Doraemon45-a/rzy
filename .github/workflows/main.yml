@@ -44,4 +44,4 @@ jobs:
       # Run Python script
       - name: Extract and upload to Google Drive
         run: |
-          python3 sscript.py
+          python3 script.py
